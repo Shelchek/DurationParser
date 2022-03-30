@@ -8,14 +8,15 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class Parser {
 
-    private final ArrayList<Double> durations = new ArrayList<>(3000);
+    private final ArrayList<Double> durations = new ArrayList<>(20000);
+    private final ArrayList<Integer> period3SecQuantity = new ArrayList<>(28000);
     private final Path logFullPath;
-    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ENGLISH);
-    Date after = dateFormat.parse("2021-09-14 12:30:00.000");
-    Date before = dateFormat.parse("2021-09-14 12:40:00.001");
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ENGLISH);
+
 
     public Parser() throws IOException, ParseException {
         this.logFullPath = Input.fullPathForLog();
@@ -54,22 +55,34 @@ public class Parser {
             }
         }
     }
-
     private void fillDurations(Path pathForFile) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(Files.newInputStream(pathForFile)))) {
-            String line;
+            String line = reader.readLine();
+            //Initiate with log's date in long with 3 sec starting time. It will be used to separate orders by 3 sec periods
+            long trailingDate = dateFormat.parse(line.split(" ")[0] + " 00:00:03.000").getTime();
+            int ordersCountIn3Sec = 0;
             while ((line = reader.readLine()) != null) {
                 if (line.contains("Duration")) {
+                    ordersCountIn3Sec++;
                     String[] split = line.split(" ");
                     String parseDate = split[0].replace('T', ' ');
                     Date current = dateFormat.parse(parseDate);
-
+                    if(current.getTime() > trailingDate) {
+                        period3SecQuantity.add(ordersCountIn3Sec - 1);
+                        ordersCountIn3Sec = 1;
+                        long count = (current.getTime() - trailingDate) / 3000;
+                        for (int i = 0; i <= count; i++) {
+                            trailingDate += 3000;
+                        }
+                    }
                     durations.add(getDurationValue(line));
-
                 }
             }
-        } catch (IOException | ParseException e) {
-            e.printStackTrace();
+            if (ordersCountIn3Sec != 0) period3SecQuantity.add(ordersCountIn3Sec);
+        } catch (IOException e) {
+            System.out.println("Issue with reading of log file. Check the access abd rerun the parser");
+        } catch (ParseException e) {
+            System.out.println("Something with log's format. It can't be parsed");
         }
     }
 
@@ -114,5 +127,21 @@ public class Parser {
         ranges.put("5s - 60", (int) getDurations().stream().filter(x -> x > 5000 && x < 60000).count());
         ranges.put(">60", (int) getDurations().stream().filter(x -> x >= 60000).count());
         return ranges;
+    }
+
+
+    public LinkedHashMap<String, String[]> period3SecAnalysis () {
+        LinkedHashMap<String, String[]> analysis = new LinkedHashMap<>();
+        ArrayList<Long> counting = new ArrayList<>();
+        counting.add(period3SecQuantity.stream().filter(x -> x >= 500 && x <= 1000).count());
+        counting.add(period3SecQuantity.stream().filter(x -> x > 1000 && x <= 1500).count());
+        counting.add(period3SecQuantity.stream().filter(x -> x > 1500 && x <= 2000).count());
+        counting.add(period3SecQuantity.stream().filter(x -> x > 2000).count());
+        //288 is 1% of 288000 which is the count of all 3 sec periods for a whole day
+        analysis.put("500 - 1000", new String[] {counting.get(0).toString(), String.format("%.4f", (double)counting.get(0) / 288) });
+        analysis.put("1000 - 1500", new String[] {counting.get(1).toString(), String.format("%.4f", (double)counting.get(1) / 288) });
+        analysis.put("1500 - 2000", new String[] {counting.get(2).toString(), String.format("%.4f", (double)counting.get(2) / 288) });
+        analysis.put(">2000", new String[] {counting.get(3).toString(), String.format("%.4f", (double)counting.get(3) / 288) });
+        return analysis;
     }
 }

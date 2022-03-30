@@ -12,12 +12,12 @@ public class Output {
         this.parser = parser;
     }
 
-    public String AverAndCountLine() {
+    private String AverAndCountLine() {
         return "Amount of trans," + "Average Duration" + "\n" + parser.amountOfTransactions() + "," +
                 parser.averageDuration() + "\n";
     }
 
-    public String rangesDuration() {
+    private String rangesDuration() {
         StringBuilder stringBuilder = new StringBuilder();
         parser.durationRanges().forEach((k, v) -> stringBuilder.append(k).append(","));
         stringBuilder.append("\n");
@@ -25,22 +25,39 @@ public class Output {
         return stringBuilder.toString();
     }
 
+    private String string3SecPeriod() {
+        StringBuilder stringBuilder = new StringBuilder();
+        parser.period3SecAnalysis().forEach(
+                (k,v) -> stringBuilder.append(k).append(" count").append(",").append("Day Burstiness Score ").append(k).append(",")
+        );
+        stringBuilder.append("\n");
+        parser.period3SecAnalysis().forEach(
+                (k,v) -> stringBuilder.append(v[0]).append(",").append(v[1]).append(",")
+        );
+        return stringBuilder.toString();
+    }
+
     public void writeData(Path outputFolder) throws IOException {
-//        Path outputFileName = Paths.get("\\reports\\"+Input.getDate() + "_meta4_perfreport.csv");
-//        Path absolute = Paths.get(parser.getAbsolutePath().getParent().toString() + "\\reports\\"+Input.getDate() + "_meta4_perfreport.csv");
         String date = "\\";
+        //Now you know why you shouldn't use the magic number? The whole code is awful...
         if (parser.getAbsolutePath().getFileName().toString().length() > 10) {
             date = "\\" + parser.getAbsolutePath().getFileName().toString().substring(0, 10);
         }
-        Path absolute = Paths.get(outputFolder.toString() + date + "_meta4_perfreport.csv");
+        Path filePath = Paths.get(outputFolder.toString() + date + "_meta4_perfreport.csv");
 
-        if (Files.notExists(absolute)) {
-            Files.createFile(absolute);
+        int count = 1;
+        while (Files.exists(filePath)) {
+            filePath = Paths.get(outputFolder.toString() + date + "_meta4_perfreport_"+count+".csv");
+            count++;
         }
-        try (BufferedWriter writer = Files.newBufferedWriter(absolute)) {
+        Files.createFile(filePath);
+        try (BufferedWriter writer = Files.newBufferedWriter(filePath)) {
             writer.write("sep=,\n");
             writer.write(this.AverAndCountLine());
             writer.write(this.rangesDuration());
+            writer.write("\n");
+            writer.write(this.string3SecPeriod());
+
         }
     }
 }
