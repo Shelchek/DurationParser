@@ -47,7 +47,7 @@ public class Input {
         while (fullName == null) {
             try {
                 System.out.println("Enter the full path to log file");
-                fullName = Paths.get(requestToEnterString());
+                fullName = Paths.get(requestToEnterString().replaceAll("\"", ""));
             } catch (InvalidPathException e) {
                 System.out.println("Something went wrong. Try to enter one more time");
             }
@@ -69,7 +69,7 @@ public class Input {
         Path folderPath = null;
         while (folderPath == null) {
             try {
-                folderPath = Paths.get(requestForOutputFolder());
+                folderPath = Paths.get(requestForOutputFolder().replaceAll("\"", ""));
             } catch (InvalidPathException e) {
                 System.out.println("Something went wrong. Try to enter one more time");
             }

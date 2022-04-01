@@ -8,7 +8,6 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class Parser {
 
@@ -35,7 +34,12 @@ public class Parser {
         Path outputFolder = Input.pathForOutputFolder();
         while (marker) {
             Parser parser = new Parser();
-            parser.fillDurations(parser.getAbsolutePath());
+            try {
+                parser.fillDurations(parser.getAbsolutePath());
+            } catch (IllegalArgumentException e) {
+                Thread.sleep(10000);
+                break;
+            }
             Output output = new Output(parser);
             output.writeData(outputFolder);
             System.out.println("Log is parsed. Check output folder");
@@ -58,8 +62,8 @@ public class Parser {
     private void fillDurations(Path pathForFile) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(Files.newInputStream(pathForFile)))) {
             String line = reader.readLine();
-            //Initiate with log's date in long with 3 sec starting time. It will be used to separate orders by 3 sec periods
-            long trailingDate = dateFormat.parse(line.split(" ")[0] + " 00:00:03.000").getTime();
+            //Initiate with log's date in long with 1 sec starting time. It will be used to separate orders by 1 sec periods
+            long trailingDate = dateFormat.parse(line.split(" ")[0] + " 00:00:01.000").getTime();
             int ordersCountIn3Sec = 0;
             while ((line = reader.readLine()) != null) {
                 if (line.contains("Duration")) {
@@ -70,9 +74,9 @@ public class Parser {
                     if(current.getTime() > trailingDate) {
                         period3SecQuantity.add(ordersCountIn3Sec - 1);
                         ordersCountIn3Sec = 1;
-                        long count = (current.getTime() - trailingDate) / 3000;
+                        long count = (current.getTime() - trailingDate) / 1000;
                         for (int i = 0; i <= count; i++) {
-                            trailingDate += 3000;
+                            trailingDate += 1000;
                         }
                     }
                     durations.add(getDurationValue(line));
@@ -81,8 +85,9 @@ public class Parser {
             if (ordersCountIn3Sec != 0) period3SecQuantity.add(ordersCountIn3Sec);
         } catch (IOException e) {
             System.out.println("Issue with reading of log file. Check the access abd rerun the parser");
-        } catch (ParseException e) {
+        } catch (Exception e) {
             System.out.println("Something with log's format. It can't be parsed");
+            throw new IllegalArgumentException();
         }
     }
 
@@ -133,15 +138,17 @@ public class Parser {
     public LinkedHashMap<String, String[]> period3SecAnalysis () {
         LinkedHashMap<String, String[]> analysis = new LinkedHashMap<>();
         ArrayList<Long> counting = new ArrayList<>();
-        counting.add(period3SecQuantity.stream().filter(x -> x >= 500 && x <= 1000).count());
-        counting.add(period3SecQuantity.stream().filter(x -> x > 1000 && x <= 1500).count());
-        counting.add(period3SecQuantity.stream().filter(x -> x > 1500 && x <= 2000).count());
-        counting.add(period3SecQuantity.stream().filter(x -> x > 2000).count());
-        //288 is 1% of 288000 which is the count of all 3 sec periods for a whole day
-        analysis.put("500 - 1000", new String[] {counting.get(0).toString(), String.format("%.4f", (double)counting.get(0) / 288) });
-        analysis.put("1000 - 1500", new String[] {counting.get(1).toString(), String.format("%.4f", (double)counting.get(1) / 288) });
-        analysis.put("1500 - 2000", new String[] {counting.get(2).toString(), String.format("%.4f", (double)counting.get(2) / 288) });
-        analysis.put(">2000", new String[] {counting.get(3).toString(), String.format("%.4f", (double)counting.get(3) / 288) });
+        counting.add(period3SecQuantity.stream().filter(x -> x >= 200 && x <= 400).count());
+        counting.add(period3SecQuantity.stream().filter(x -> x > 400 && x <= 800).count());
+        counting.add(period3SecQuantity.stream().filter(x -> x > 800 && x <= 1000).count());
+        counting.add(period3SecQuantity.stream().filter(x -> x > 1000).count());
+
+        //86400 - quantity of seconds for a whole day
+        int percent = 86400 / 100;
+        analysis.put("200 - 400", new String[] {counting.get(0).toString(), String.format("%.4f", (double)counting.get(0) / percent) });
+        analysis.put("400 - 800", new String[] {counting.get(1).toString(), String.format("%.4f", (double)counting.get(1) / percent) });
+        analysis.put("800 - 1000", new String[] {counting.get(2).toString(), String.format("%.4f", (double)counting.get(2) / percent) });
+        analysis.put(">1000", new String[] {counting.get(3).toString(), String.format("%.4f", (double)counting.get(3) / percent) });
         return analysis;
     }
 }
