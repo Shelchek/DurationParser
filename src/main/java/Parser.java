@@ -8,14 +8,14 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class Parser {
 
     private final ArrayList<Double> durations = new ArrayList<>(20000);
-    private final ArrayList<Integer> period3SecQuantity = new ArrayList<>(28000);
+    private final ArrayList<Integer> periodSecQuantity = new ArrayList<>(28000);
     private final Path logFullPath;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ENGLISH);
-
 
     public Parser() throws IOException, ParseException {
         this.logFullPath = Input.fullPathForLog();
@@ -64,25 +64,26 @@ public class Parser {
             String line = reader.readLine();
             //Initiate with log's date in long with 1 sec starting time. It will be used to separate orders by 1 sec periods
             long trailingDate = dateFormat.parse(line.split(" ")[0] + " 00:00:01.000").getTime();
-            int ordersCountIn3Sec = 0;
+            int ordersCountInSec = 0;
             while ((line = reader.readLine()) != null) {
                 if (line.contains("Duration")) {
-                    ordersCountIn3Sec++;
+                    ordersCountInSec++;
                     String[] split = line.split(" ");
                     String parseDate = split[0].replace('T', ' ');
                     Date current = dateFormat.parse(parseDate);
                     if(current.getTime() > trailingDate) {
-                        period3SecQuantity.add(ordersCountIn3Sec - 1);
-                        ordersCountIn3Sec = 1;
+                        periodSecQuantity.add(ordersCountInSec - 1);
+                        ordersCountInSec = 1;
                         long count = (current.getTime() - trailingDate) / 1000;
                         for (int i = 0; i <= count; i++) {
                             trailingDate += 1000;
                         }
                     }
-                    durations.add(getDurationValue(line));
+                    double duration = getDurationValue(line);
+                    durations.add(duration);
                 }
             }
-            if (ordersCountIn3Sec != 0) period3SecQuantity.add(ordersCountIn3Sec);
+            if (ordersCountInSec != 0) periodSecQuantity.add(ordersCountInSec);
         } catch (IOException e) {
             System.out.println("Issue with reading of log file. Check the access abd rerun the parser");
         } catch (Exception e) {
@@ -135,13 +136,13 @@ public class Parser {
     }
 
 
-    public LinkedHashMap<String, String[]> period3SecAnalysis () {
+    public LinkedHashMap<String, String[]> periodSecAnalysis() {
         LinkedHashMap<String, String[]> analysis = new LinkedHashMap<>();
         ArrayList<Long> counting = new ArrayList<>();
-        counting.add(period3SecQuantity.stream().filter(x -> x >= 200 && x <= 400).count());
-        counting.add(period3SecQuantity.stream().filter(x -> x > 400 && x <= 800).count());
-        counting.add(period3SecQuantity.stream().filter(x -> x > 800 && x <= 1000).count());
-        counting.add(period3SecQuantity.stream().filter(x -> x > 1000).count());
+        counting.add(periodSecQuantity.stream().filter(x -> x >= 200 && x <= 400).count());
+        counting.add(periodSecQuantity.stream().filter(x -> x > 400 && x <= 800).count());
+        counting.add(periodSecQuantity.stream().filter(x -> x > 800 && x <= 1000).count());
+        counting.add(periodSecQuantity.stream().filter(x -> x > 1000).count());
 
         //86400 - quantity of seconds for a whole day
         int percent = 86400 / 100;
@@ -150,5 +151,14 @@ public class Parser {
         analysis.put("800 - 1000", new String[] {counting.get(2).toString(), String.format("%.4f", (double)counting.get(2) / percent) });
         analysis.put(">1000", new String[] {counting.get(3).toString(), String.format("%.4f", (double)counting.get(3) / percent) });
         return analysis;
+    }
+
+    public double getMedian() {
+        List<Double> list = durations.stream().filter(x -> x != 0.0).sorted().collect(Collectors.toList());
+        int size = list.size();
+        if (size % 2 == 0) {
+            return (list.get(size / 2) + list.get(size / 2 - 1)) / 2;
+        }
+        else return list.get(size / 2);
     }
 }

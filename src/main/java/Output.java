@@ -13,8 +13,8 @@ public class Output {
     }
 
     private String AverAndCountLine() {
-        return "Amount of trans," + "Average Duration" + "\n" + parser.amountOfTransactions() + "," +
-                parser.averageDuration() + "\n";
+        return "Amount of trans," + "Average Duration," + "Median Duration" + "\n" + parser.amountOfTransactions() + "," +
+                parser.averageDuration() + "," + parser.getMedian() + "\n";
     }
 
     private String rangesDuration() {
@@ -27,11 +27,11 @@ public class Output {
 
     private String string3SecPeriod() {
         StringBuilder stringBuilder = new StringBuilder();
-        parser.period3SecAnalysis().forEach(
+        parser.periodSecAnalysis().forEach(
                 (k,v) -> stringBuilder.append(k).append(" count").append(",").append("Day Burstiness Score ").append(k).append(",")
         );
         stringBuilder.append("\n");
-        parser.period3SecAnalysis().forEach(
+        parser.periodSecAnalysis().forEach(
                 (k,v) -> stringBuilder.append(v[0]).append(",").append(v[1]).append(",")
         );
         return stringBuilder.toString();
