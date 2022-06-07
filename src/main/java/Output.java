@@ -37,6 +37,15 @@ public class Output {
         return stringBuilder.toString();
     }
 
+    private String over55SecDurationsAndId() {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append("requestID,Duration\n");
+        parser.getTimeOutIdAndDuration().forEach(
+                x -> stringBuilder.append(x).append("\n")
+        );
+        return stringBuilder.toString();
+    }
+
     public void writeData(Path outputFolder) throws IOException {
         String date = "\\";
         //Now you know why you shouldn't use the magic number? The whole code is awful...
@@ -57,7 +66,8 @@ public class Output {
             writer.write(this.rangesDuration());
             writer.write("\n");
             writer.write(this.string3SecPeriod());
-
+            writer.write("\n");
+            writer.write(over55SecDurationsAndId());
         }
     }
 }

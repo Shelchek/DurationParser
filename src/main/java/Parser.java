@@ -14,10 +14,11 @@ public class Parser {
 
     private final ArrayList<Double> durations = new ArrayList<>(20000);
     private final ArrayList<Integer> periodSecQuantity = new ArrayList<>(28000);
+    private final ArrayList<String> timeOutIdAndDuration = new ArrayList<>();
     private final Path logFullPath;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ENGLISH);
 
-    public Parser() throws IOException, ParseException {
+    public Parser() throws IOException {
         this.logFullPath = Input.fullPathForLog();
     }
 
@@ -29,7 +30,11 @@ public class Parser {
         return durations;
     }
 
-    public static void main(String[] args) throws IOException, InterruptedException, ParseException {
+    public List<String> getTimeOutIdAndDuration() {
+        return timeOutIdAndDuration;
+    }
+
+    public static void main(String[] args) throws IOException, InterruptedException {
         boolean marker = true;
         Path outputFolder = Input.pathForOutputFolder();
         while (marker) {
@@ -59,6 +64,7 @@ public class Parser {
             }
         }
     }
+
     private void fillDurations(Path pathForFile) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(Files.newInputStream(pathForFile)))) {
             String line = reader.readLine();
@@ -68,10 +74,8 @@ public class Parser {
             while ((line = reader.readLine()) != null) {
                 if (line.contains("Duration")) {
                     ordersCountInSec++;
-                    String[] split = line.split(" ");
-                    String parseDate = split[0].replace('T', ' ');
-                    Date current = dateFormat.parse(parseDate);
-                    if(current.getTime() > trailingDate) {
+                    Date current = parseDate(line);
+                    if (current.getTime() > trailingDate) {
                         periodSecQuantity.add(ordersCountInSec - 1);
                         ordersCountInSec = 1;
                         long count = (current.getTime() - trailingDate) / 1000;
@@ -79,8 +83,7 @@ public class Parser {
                             trailingDate += 1000;
                         }
                     }
-                    double duration = getDurationValue(line);
-                    durations.add(duration);
+                    addDurationValue(line);
                 }
             }
             if (ordersCountInSec != 0) periodSecQuantity.add(ordersCountInSec);
@@ -92,28 +95,42 @@ public class Parser {
         }
     }
 
-    private Double getDurationValue(String source) {
+
+    private Date parseDate(String line) throws ParseException {
+        String[] split = line.split(" ");
+        String parseDate = split[0].replace('T', ' ');
+        return dateFormat.parse(parseDate);
+    }
+
+    private void addDurationValue(String source) {
         String[] testo = null;
         Matcher matcher = Pattern.compile("(Duration.*)").matcher(source);
         if (matcher.find()) testo = matcher.group(1).split(" ");
-        Double duration = null;
+        double duration;
         try {
             assert testo != null;
-            duration = Double.valueOf(testo[2]);
+            duration = Double.parseDouble(testo[2]);
+            if (duration > 0) {
+                durations.add(duration);
+            }
+            if (duration > 55000) {
+                String id = source.split(" ")[2].replace(">:", "");
+                timeOutIdAndDuration.add(id + "," + duration);
+            }
         } catch (Exception e) {
             System.out.println("Something wrong with log's format");
         }
-        return duration;
+
     }
 
     public int amountOfTransactions() {
-        return (int) getDurations().stream().filter(x -> x > 0).count();
+        return getDurations().size();
     }
 
     public double averageDuration() {
         double average = 0;
         if (!getDurations().isEmpty()) {
-            average = getDurations().stream().mapToDouble(Double::doubleValue).filter(x -> x > 0).average().getAsDouble();
+            average = getDurations().stream().mapToDouble(Double::doubleValue).filter(x -> x <= 55000).average().getAsDouble();
         }
         return average;
     }
@@ -130,8 +147,8 @@ public class Parser {
         ranges.put("2 - 3s", (int) getDurations().stream().filter(x -> x > 2000 && x <= 3000).count());
         ranges.put("3 - 4s", (int) getDurations().stream().filter(x -> x > 3000 && x <= 4000).count());
         ranges.put("4 - 5s", (int) getDurations().stream().filter(x -> x > 4000 && x <= 5000).count());
-        ranges.put("5s - 60", (int) getDurations().stream().filter(x -> x > 5000 && x < 60000).count());
-        ranges.put(">60", (int) getDurations().stream().filter(x -> x >= 60000).count());
+        ranges.put("5s - 55", (int) getDurations().stream().filter(x -> x > 5000 && x <= 55000).count());
+        ranges.put(">55 Possible timeout", (int) getDurations().stream().filter(x -> x > 55000).count());
         return ranges;
     }
 
@@ -146,19 +163,18 @@ public class Parser {
 
         //86400 - quantity of seconds for a whole day
         int percent = 86400 / 100;
-        analysis.put("200 - 400", new String[] {counting.get(0).toString(), String.format("%.4f", (double)counting.get(0) / percent) });
-        analysis.put("400 - 800", new String[] {counting.get(1).toString(), String.format("%.4f", (double)counting.get(1) / percent) });
-        analysis.put("800 - 1000", new String[] {counting.get(2).toString(), String.format("%.4f", (double)counting.get(2) / percent) });
-        analysis.put(">1000", new String[] {counting.get(3).toString(), String.format("%.4f", (double)counting.get(3) / percent) });
+        analysis.put("200 - 400", new String[]{counting.get(0).toString(), String.format("%.4f", (double) counting.get(0) / percent)});
+        analysis.put("400 - 800", new String[]{counting.get(1).toString(), String.format("%.4f", (double) counting.get(1) / percent)});
+        analysis.put("800 - 1000", new String[]{counting.get(2).toString(), String.format("%.4f", (double) counting.get(2) / percent)});
+        analysis.put(">1000", new String[]{counting.get(3).toString(), String.format("%.4f", (double) counting.get(3) / percent)});
         return analysis;
     }
 
     public double getMedian() {
-        List<Double> list = durations.stream().filter(x -> x != 0.0).sorted().collect(Collectors.toList());
+        List<Double> list = durations.stream().filter(x -> x <= 55000).sorted().collect(Collectors.toList());
         int size = list.size();
         if (size % 2 == 0) {
             return (list.get(size / 2) + list.get(size / 2 - 1)) / 2;
-        }
-        else return list.get(size / 2);
+        } else return list.get(size / 2);
     }
 }
